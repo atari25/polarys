@@ -1,0 +1,69 @@
+{
+  "checkedAt": "2026-09-27T04:49:56.215Z",
+  "games": [
+    {
+      "id": "football-2026-10-03-West Virginia",
+      "date": "2026-10-03",
+      "title": "Iowa State vs. West Virginia",
+      "kind": "Game day",
+      "detail": "Home · Ames, Iowa · 11:00 AM · Homecoming/Color-It-Cardinal",
+      "source": "https://cyclones.com/sports/football/schedule/text"
+    },
+    {
+      "id": "football-2026-10-09-BYU",
+      "date": "2026-10-09",
+      "title": "Iowa State at BYU",
+      "kind": "Game day",
+      "detail": "Away · Provo, Utah · 9:15 PM",
+      "source": "https://cyclones.com/sports/football/schedule/text"
+    },
+    {
+      "id": "football-2026-10-24-Arizona",
+      "date": "2026-10-24",
+      "title": "Iowa State at Arizona",
+      "kind": "Game day",
+      "detail": "Away · Tucson, Ariz. · TBA",
+      "source": "https://cyclones.com/sports/football/schedule/text"
+    },
+    {
+      "id": "football-2026-10-31-Oklahoma State",
+      "date": "2026-10-31",
+      "title": "Iowa State vs. Oklahoma State",
+      "kind": "Game day",
+      "detail": "Home · Ames, Iowa · TBA",
+      "source": "https://cyclones.com/sports/football/schedule/text"
+    },
+    {
+      "id": "football-2026-11-07-Baylor",
+      "date": "2026-11-07",
+      "title": "Iowa State at Baylor",
+      "kind": "Game day",
+      "detail": "Away · Waco, Texas · TBA",
+      "source": "https://cyclones.com/sports/football/schedule/text"
+    },
+    {
+      "id": "football-2026-11-14-Cincinnati",
+      "date": "2026-11-14",
+      "title": "Iowa State vs. Cincinnati",
+      "kind": "Game day",
+      "detail": "Home · Ames, Iowa · TBA",
+      "source": "https://cyclones.com/sports/football/schedule/text"
+    },
+    {
+      "id": "football-2026-11-20-UCF",
+      "date": "2026-11-20",
+      "title": "Iowa State at UCF",
+      "kind": "Game day",
+      "detail": "Away · Orlando, Fla. · 5:00 PM",
+      "source": "https://cyclones.com/sports/football/schedule/text"
+    },
+    {
+      "id": "football-2026-11-28-Kansas State",
+      "date": "2026-11-28",
+      "title": "Iowa State vs. Kansas State",
+      "kind": "Game day",
+      "detail": "Home · Ames, Iowa · TBA · Senior Day",
+      "source": "https://cyclones.com/sports/football/schedule/text"
+    }
+  ]
+}
