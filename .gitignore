@@ -39,5 +39,10 @@ yarn-error.*
 app-example
 
 # generated native folders
-/ios
+# Keep the native iOS project; ios/.gitignore excludes build output.
 /android
+
+.env
+.env.*
+!.env.example
+.claude/

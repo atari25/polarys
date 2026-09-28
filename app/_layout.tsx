@@ -1,24 +1,27 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import '@/src/tasks';
+import { AppColors } from '@/constants/theme';
+import { DarkTheme, ThemeProvider } from '@react-navigation/native';
+import { Stack, router } from 'expo-router';
+import { useEffect } from 'react';
+import { listenForNightNotifications } from '@/src/notification-routing';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
-
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
+  useEffect(() => listenForNightNotifications(() => router.push('/alert')), []);
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={{ ...DarkTheme, colors: { ...DarkTheme.colors, primary: AppColors.highlight, background: AppColors.background, card: AppColors.surface, text: '#FFFFFF', border: '#333333', notification: '#FFFFFF' } }}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        <Stack.Screen name="state-laws" options={{ headerShown: false }} />
+        <Stack.Screen name="home-address" options={{ headerShown: false }} />
+        <Stack.Screen name="car" options={{ headerShown: false }} />
+        <Stack.Screen name="purchase" options={{ headerShown: false }} />
+        <Stack.Screen name="alert" options={{ headerShown: false }} />
+        <Stack.Screen name="shortcuts" options={{ headerShown: false }} />
+        <Stack.Screen name="got-dui"  options={{ headerShown: false }} />
       </Stack>
-      <StatusBar style="auto" />
+      <StatusBar style="light" />
     </ThemeProvider>
   );
 }
