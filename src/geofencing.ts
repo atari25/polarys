@@ -8,6 +8,7 @@ import { findNearbyBars } from './places';
 import { dispatchNight } from './night-controller';
 import { readNight } from './night-store';
 import { isNightTime } from './night-session';
+import { isSavedPlace, readSavedPlaces } from './saved-places';
 
 const KEY = 'polarys.tracking.v2';
 type Runtime = { venues: BarVenue[]; lastFix: number; startedAt: number | null; blockedUntil: number; lastLookup: number };
@@ -61,17 +62,41 @@ async function refresh(runtime: Runtime, lat: number, lon: number, now: number) 
     runtime.venues = nearestVenues([...merged.values()],lat,lon);
     runtime.lastLookup = now;
   } else runtime.venues = nearestVenues(runtime.venues,lat,lon);
+  await syncSavedPlaces(runtime);
+  await registerRegions(runtime);
+  await save(runtime);
+}
+async function syncSavedPlaces(runtime: Runtime) {
+  const saved = await readSavedPlaces();
+  // Reserve slots for explicitly saved addresses, within iOS's 20-region limit.
+  runtime.venues = [...saved, ...runtime.venues.filter(v => !isSavedPlace(v.id))].slice(0, C.maxGeofences);
+  const night = await readNight();
+  if (night.currentVenue && isSavedPlace(night.currentVenue.id) && !saved.some(p => p.id === night.currentVenue!.id)) {
+    // Removing a place cancels its visit without generating a departure reminder.
+    await dispatchNight({ type: 'home' });
+    await stopPrecise();
+    runtime.startedAt = null;
+  }
+}
+async function registerRegions(runtime: Runtime) {
   if ((await Location.getBackgroundPermissionsAsync()).granted) {
     const regions = runtime.venues.map(v => ({ identifier: v.id, latitude: v.lat, longitude: v.lon, radius: C.geofenceRadiusM, notifyOnEnter: true, notifyOnExit: true }));
-    // Re-register only if the set changes; registration itself produces initial events on iOS.
     const signature = JSON.stringify(regions);
     if (!await Location.hasStartedGeofencingAsync(TASK_NAMES.geofence) || await deviceStorage.getItem(KEY+'.regions') !== signature) {
       await Location.startGeofencingAsync(TASK_NAMES.geofence, regions);
-      await deviceStorage.setItem(KEY+'.regions',signature);
+      await deviceStorage.setItem(KEY+'.regions', signature);
     }
   }
-  await save(runtime);
 }
+export function refreshSavedPlaceMonitoring() {
+  return serial(async () => {
+    const runtime = await read();
+    await syncSavedPlaces(runtime);
+    await registerRegions(runtime);
+    await save(runtime);
+  });
+}
+
 async function safety(runtime: Runtime, now: number) {
   if (runtime.startedAt !== null && now >= nightEnd(runtime.startedAt)) {
     await stopPrecise(); runtime.startedAt = null;
@@ -111,6 +136,7 @@ export async function resumeNightForTesting() {
 }
 async function processFix(position: Location.LocationObject, refreshRegions: boolean) {
   const now = Date.now(), runtime = await read();
+  await syncSavedPlaces(runtime);
   if (!await safety(runtime,now)) {
     if (refreshRegions) await refresh(runtime,position.coords.latitude,position.coords.longitude,now);
     return;
@@ -151,6 +177,7 @@ export const processVenueLocation = (position: Location.LocationObject, refreshR
 export function handleGeofence(eventType: Location.GeofencingEventType, region: Location.LocationRegion) {
   return serial(async () => {
     const now = Date.now(), runtime = await read();
+    await syncSavedPlaces(runtime);
     const venue = runtime.venues.find(v => v.id === region.identifier);
     if (!venue) return;
     await refresh(runtime,venue.lat,venue.lon,now);
