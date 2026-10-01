@@ -40,3 +40,13 @@ Reference: Expo SDK 54 Location documentation, https://docs.expo.dev/versions/v5
 Nearby discovery now requests pub and bar subcategories as well as bar/night_club. Eligibility checks both primaryType and the full types array, so a restaurant with a secondary bar/pub type uses the same timer, points, departure and car rules. Response aliases nightclub and club are accepted as categories; a business name containing “club” alone does not qualify. Distinct nearby businesses are not discarded simply for being within 40 m of a built-in venue.
 
 Live validation encountered HTTP 429: Google SearchNearbyRequest daily quota exceeded. Built-in and cached venues remain available, but new discovery cannot be guaranteed until that external quota recovers or is adjusted. No claim was made that 2311 Chamberlain Street was actually returned by the API. All 72 automated tests pass, including discovered-pub geofence registration and departure/points behavior.
+
+## User-saved places
+
+Settings → “I do stupid stuff here” lets users search for and confirm an address, optionally name it, and remove it later. No example address is preloaded. Up to 10 saved places are stored locally under `polarys.savedPlaces.v1`, with no automatic expiry; removal also removes the cached monitoring region. Search uses the existing Google/device address lookup.
+
+Saved places reserve slots within the existing 20-region limit and use the same 100 m wakeup boundary, accurate 40 m venue entry, 9 PM–5 AM window, 45-minute accumulated venue threshold, and one departure notification per night session as bars. The saved home still takes precedence and ends the night. Removing a place during a visit cancels that visit without producing a departure reminder.
+
+Tapping a night notification opens “How are you getting home?” Choosing “I was planning to drive” opens the drink question; all answers lead to ride options and none is persisted. Users can also open ride options directly.
+
+Validation: tests cover persistence across restart, offline registration, the 45-minute departure, duplicate callbacks, short visits, daytime exclusion, removal, saved-place priority within 20 regions, invalid coordinates, deduplication, and the 10-place limit. Physical iPhone boundary delivery still needs a real walk test with Always + Precise location and notifications enabled.

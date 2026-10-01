@@ -250,3 +250,71 @@ for (const id of ['ajs-ultra-lounge', 'paddys-irish-pub']) {
   assert.equal(h.scheduled.filter(n => n.content.data.kind === 'departure').length,1);
  });
 }
+
+test('saved address survives restart, registers offline, and sends one departure after 45 minutes', async () => {
+  const initial = harness();
+  await initial.load('saved-places').savePlace({address:'Example party address',latitude:42.04,longitude:-93.67}, 'Friend’s place');
+  const h = harness(initial.data), geo = h.load('geofencing');
+  await geo.refreshSavedPlaceMonitoring();
+  const place = (await h.load('saved-places').readSavedPlaces())[0];
+  assert.ok(h.regions().some(r => r.identifier === place.id && r.radius === 100));
+  const point = () => ({timestamp:h.now(),coords:{latitude:place.lat,longitude:place.lon,accuracy:5}});
+  await geo.processVenueLocation(point(),true);
+  assert.equal(h.night().currentVenue.name, 'Friend’s place');
+  h.advance(45);
+  await geo.processVenueLocation(point());
+  assert.equal(h.scheduled.length,0);
+  h.advance(1);
+  await geo.processVenueLocation({timestamp:h.now(),coords:{latitude:place.lat+0.001,longitude:place.lon,accuracy:5}});
+  await geo.handleGeofence(2,{identifier:place.id});
+  assert.equal(h.scheduled.filter(n => n.content.data.kind === 'departure').length,1);
+});
+
+test('saved places respect the night window and short visits do not notify', async () => {
+  const h = harness(), geo = h.load('geofencing');
+  await h.load('saved-places').savePlace({address:'Party',latitude:42.04,longitude:-93.67},'Party');
+  await geo.refreshSavedPlaceMonitoring();
+  const place = (await h.load('saved-places').readSavedPlaces())[0];
+  const point = () => ({timestamp:h.now(),coords:{latitude:place.lat,longitude:place.lon,accuracy:5}});
+  await geo.processVenueLocation(point(),true);
+  h.advance(44);
+  await geo.handleGeofence(2,{identifier:place.id});
+  assert.equal(h.scheduled.length,0);
+  h.advance(8*60);
+  await geo.processVenueLocation(point(),true);
+  assert.equal(h.night().status,'idle');
+  assert.equal(h.tracking(),false);
+});
+
+test('removing a saved place clears its cached fence and visit without a departure', async () => {
+  const h = harness(), geo = h.load('geofencing'), places = h.load('saved-places');
+  await places.savePlace({address:'Party',latitude:42.04,longitude:-93.67},'Party');
+  await geo.processVenueLocation({timestamp:h.now(),coords:{latitude:42.04,longitude:-93.67,accuracy:5}},true);
+  const place = (await places.readSavedPlaces())[0];
+  h.advance(46);
+  await places.removeSavedPlace(place.id);
+  await geo.refreshSavedPlaceMonitoring();
+  await geo.handleGeofence(2,{identifier:place.id});
+  assert.ok(!h.regions().some(r => r.identifier === place.id));
+  assert.ok(!JSON.parse(h.data.get('polarys.tracking.v2')).venues.some(v=>v.id===place.id));
+  assert.equal(h.night().status,'idle');
+  assert.equal(h.scheduled.length,0);
+});
+
+test('saved addresses reserve fence slots even among 20 closer Google venues', async () => {
+  const nearby = Array.from({length:20},(_,i)=>({id:`google${i}`,name:`Bar ${i}`,lat:42.02+i/10000,lon:-93.65}));
+  const h = harness(new Map(),true,nearby);
+  await h.load('saved-places').savePlace({address:'Far friend',latitude:42.05,longitude:-93.69},'Far friend');
+  await h.load('geofencing').processVenueLocation(fix(h),true);
+  assert.equal(h.regions().length,20);
+  assert.ok(h.regions().some(r=>r.identifier.startsWith('personal:')));
+});
+
+test('saved places validate coordinates, deduplicate, and enforce the limit', async () => {
+  const h = harness(), places = h.load('saved-places');
+  await assert.rejects(()=>places.savePlace({address:'Bad',latitude:NaN,longitude:0},''));
+  for(let i=0;i<10;i++) await places.savePlace({address:`Place ${i}`,latitude:40+i/100,longitude:-93},'');
+  await places.savePlace({address:'Updated',latitude:40,longitude:-93},'Updated');
+  assert.equal((await places.readSavedPlaces()).length,10);
+  await assert.rejects(()=>places.savePlace({address:'Extra',latitude:41,longitude:-93},''));
+});

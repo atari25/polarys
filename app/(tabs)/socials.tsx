@@ -12,7 +12,7 @@ const open = (url: string) => Linking.openURL(url).catch(() => Alert.alert('Coul
 export default function SocialsScreen() {
   const [schedule, setSchedule] = useState(initial);
   const [refreshing, setRefreshing] = useState(false);
-  const [status, setStatus] = useState('Saved official schedule');
+  const [status, setStatus] = useState('Saved schedule');
   const [now, setNow] = useState(new Date());
   const [filter, setFilter] = useState('All');
   const refresh = useCallback(async (signal?: AbortSignal) => {
@@ -36,10 +36,10 @@ export default function SocialsScreen() {
       if (signal?.aborted) return;
       const updated = { games, checkedAt: new Date().toISOString() };
       setSchedule(updated);
-      setStatus('Updated from Iowa State Athletics');
+      setStatus('Updated');
       await AsyncStorage.setItem(CACHE, JSON.stringify(updated)).catch(() => {});
     } catch {
-      if (!signal?.aborted) setStatus('Could not refresh · showing saved schedule. Check official listings for changes.');
+      if (!signal?.aborted) setStatus('Offline · saved schedule');
     } finally {
       clearTimeout(timeout);
       signal?.removeEventListener('abort', abort);
@@ -54,26 +54,25 @@ export default function SocialsScreen() {
   const events = upcomingSocials(schedule.games, now).filter(event => filter === 'All' || event.kind === filter);
   return <SafeAreaView style={styles.root} edges={['top','left','right']}>
     <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={colors.highlight} />}>
-      <Text style={styles.title}>Upcoming socials</Text>
-      <Text style={styles.subtitle}>Cyclone game days and occasions to plan ahead for.</Text>
-      <View style={styles.filters}>{['All','Game day','Social occasion'].map(item => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: filter === item }} onPress={() => setFilter(item)} style={[styles.filter, filter === item && styles.selected]}><Text style={{ color: filter === item ? '#111' : '#FFF' }}>{item}</Text></Pressable>)}</View>
-      <Text style={styles.note}>{status}{'\n'}Last checked: {new Date(schedule.checkedAt).toLocaleDateString()} · Football · Times as published by Athletics.</Text>
-      <Pressable accessibilityRole="link" onPress={() => void open(FOOTBALL_SOURCE)}><Text style={styles.link}>Official football schedule ↗</Text></Pressable>
-      {events.length === 0 && <Text style={styles.subtitle}>No upcoming dates in this category. Check the official schedule for new announcements.</Text>}
+      <Text style={styles.title}>Socials</Text>
+      <View style={styles.filters}>{['All','Game day','Social occasion'].map(item => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: filter === item }} onPress={() => setFilter(item)} style={[styles.filter, filter === item && styles.selected]}><Text style={{ color: filter === item ? '#111' : '#FFF' }}>{item === 'Game day' ? 'Games' : item === 'Social occasion' ? 'Occasions' : item}</Text></Pressable>)}</View>
+      <Text style={styles.note}>{status} · {new Date(schedule.checkedAt).toLocaleDateString()}</Text>
+      <Pressable accessibilityRole="link" onPress={() => void open(FOOTBALL_SOURCE)}><Text style={styles.link}>Iowa State schedule ↗</Text></Pressable>
+      {events.length === 0 && <Text style={styles.subtitle}>No upcoming dates.</Text>}
       {events.map(event => <View key={event.id} style={styles.card}>
-        <Text style={styles.date}>{new Date(`${event.date}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',weekday:'short',year:'numeric',timeZone:'America/Chicago'})} · {event.kind}</Text>
+        <Text style={styles.date}>{new Date(`${event.date}T12:00:00Z`).toLocaleDateString('en-US',{month:'short',day:'numeric',weekday:'short',year:'numeric',timeZone:'America/Chicago'})}</Text>
         <Text style={styles.eventTitle}>{event.title}</Text>
-        <Text style={styles.subtitle}>{event.detail}</Text>
-        {event.source && <Pressable accessibilityRole="link" onPress={() => void open(event.source!)}><Text style={styles.link}>Confirm game details ↗</Text></Pressable>}
-        <Pressable accessibilityRole="button" onPress={() => router.navigate('/ride')}><Text style={styles.link}>Plan a safe ride →</Text></Pressable>
+        {event.kind === 'Game day' && <Text style={styles.subtitle}>{event.detail}</Text>}
+        {event.source && <Pressable accessibilityRole="link" onPress={() => void open(event.source!)}><Text style={styles.link}>Game details ↗</Text></Pressable>}
+        <Pressable accessibilityRole="button" onPress={() => router.navigate('/ride')}><Text style={styles.link}>Find a ride →</Text></Pressable>
       </View>)}
       {filter !== 'Game day' && <View style={styles.card}>
-        <Text style={styles.date}>LOCAL TRADITION · NEXT DATE UNCONFIRMED</Text>
+        <Text style={styles.date}>DATE TBA</Text>
         <Text style={styles.eventTitle}>801 Day · Ames</Text>
-        <Text style={styles.subtitle}>An informal start-of-fall-semester tradition, usually the Saturday before classes. It is not August 1 or an official university event. We’ll show an exact date only when verified.</Text>
-        <Pressable accessibilityRole="link" onPress={() => void open('https://www.registrar.iastate.edu/academic-calendars')}><Text style={styles.link}>Check the academic calendar ↗</Text></Pressable>
+        <Text style={styles.subtitle}>An unofficial Ames tradition before fall classes.</Text>
+        <Pressable accessibilityRole="link" onPress={() => void open('https://www.registrar.iastate.edu/academic-calendars')}><Text style={styles.link}>Academic calendar ↗</Text></Pressable>
       </View>}
-      <Text style={styles.note}>Social occasions are planning dates, not confirmed parties or predictions of anyone’s drinking. Local celebrations may take place on a different day.</Text>
+      <Text style={styles.note}>Occasions are calendar dates, not confirmed events.</Text>
     </ScrollView>
   </SafeAreaView>;
 }

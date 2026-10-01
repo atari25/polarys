@@ -14,6 +14,7 @@ export default function RootLayout() {
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="state-laws" options={{ headerShown: false }} />
+        <Stack.Screen name="saved-places" options={{ headerShown: false }} />
         <Stack.Screen name="home-address" options={{ headerShown: false }} />
         <Stack.Screen name="car" options={{ headerShown: false }} />
         <Stack.Screen name="purchase" options={{ headerShown: false }} />

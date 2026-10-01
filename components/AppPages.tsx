@@ -1,3 +1,4 @@
+import { PointsGauge } from '@/components/PointsGauge';
 import { dailyHeadline } from '../src/daily-headline';
 import { readHome } from '@/src/home-address';
 import { HomeAddress } from '@/src/ride-links';
@@ -208,12 +209,12 @@ export function AppPage({ page }: { page: 'Home' | 'Ride' | 'Resources' | 'Setti
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.header}><View>
         <Text style={styles.wordmark}>{page === 'Home' ? 'polarys' : page}</Text>
-        <Text style={styles.tagline}>{page === 'Home' ? 'Your visit. Your way home.' : page === 'Ride' ? 'Choose how you’ll get home.' : page === 'Resources' ? 'Understand your options.' : 'Make Polarys work for you.'}</Text>
+        {page !== 'Home' && <Text style={styles.tagline}>{page === 'Ride' ? 'Choose how you’ll get home.' : page === 'Resources' ? 'Understand your options.' : 'Make Polarys work for you.'}</Text>}
       </View></View>
-      {(page === 'Home' || page === 'Ride') && <Pressable accessibilityRole="button" onPress={() => void currentPosition.refresh()}>
+      {(page === 'Home' || page === 'Ride') && <Pressable accessibilityRole="button" accessibilityLabel="Refresh current location" onPress={() => void currentPosition.refresh()}>
         <Text style={styles.scoreLabel}>{currentPosition.error && currentPosition.location ? 'LAST KNOWN LOCATION' : 'CURRENT LOCATION'}</Text>
         <Text style={styles.detectedBarDetail}>{currentPosition.location?.label ?? (currentPosition.loading ? 'Finding you…' : 'Location unavailable')}</Text>
-        <Text style={styles.scoreHint}>{currentPosition.error ?? (currentPosition.loading ? 'Updating…' : 'Tap to refresh')}</Text>
+        {(currentPosition.error || currentPosition.loading) && <Text style={styles.scoreHint}>{currentPosition.error ?? 'Updating…'}</Text>}
       </Pressable>}
       {page === 'Home' && <>
         <View style={styles.detectedBarCard}>
@@ -223,17 +224,16 @@ export function AppPage({ page }: { page: 'Home' | 'Ride' | 'Resources' | 'Setti
           </View>
           <Text style={styles.detectedBarName}>{activeVisit ? venueSession?.name : locationPermission === 'denied' ? 'Location is off' : night.status === 'between_venues' || night.status === 'at_risk' ? 'Heading home?' : dailyHeadline()}</Text>
           <Pressable style={styles.visitSummary} accessibilityRole="button" accessibilityLabel="Venue timer. Show points breakdown" onPress={() => setShowScoreDetails(true)}>
-            <Text style={styles.scoreLabel}>TIME AT VENUES</Text>
+            <Text style={styles.scoreLabel}>VENUE TIME</Text>
             <Text style={styles.visitDuration}>{formatDuration(0, totalVenueMs(night, Date.now()))}</Text>
-            <Text style={styles.connectionNote}>{points.total} points · Tap for breakdown ›</Text>
+            <Text style={styles.connectionNote}>{points.total} points ›</Text>
           </Pressable>
-          <Text style={styles.scoreHint}>{nightError ? 'Could not load your night.' : '45+ minutes? We’ll remind you when you leave.'}</Text>
-          <Text style={styles.statusFootnote}>Activity signals only. Not a sobriety check.</Text>
+          <Text style={styles.scoreHint}>{nightError ? 'Could not load your night.' : 'Departure reminder after 45+ minutes.'}</Text>
+          <Text style={styles.statusFootnote}>Activity only · not a sobriety check.</Text>
         </View>
 
         <Pressable accessibilityRole="button" style={styles.rideButton} onPress={() => router.navigate('/ride')}>
-          <Text style={styles.rideButtonText}>Get a safe ride</Text>
-          <Text style={styles.rideButtonDetail}>Uber, Lyft, transit or a friend</Text>
+          <Text style={styles.rideButtonText}>Find a ride</Text>
         </Pressable>
 
 
@@ -242,8 +242,7 @@ export function AppPage({ page }: { page: 'Home' | 'Ride' | 'Resources' | 'Setti
           <Text style={styles.detectedBarDetail}>Enable {!backgroundEnabled ? 'Always location' : 'notifications'} in Settings →</Text>
         </Pressable>}
         <Pressable accessibilityRole="button" style={styles.resourceButton} onPress={() => router.navigate('/socials')}>
-          <Text style={styles.resourceTitle}>Upcoming socials</Text>
-          <Text style={styles.detectedBarDetail}>Cyclone game days, local traditions and seasonal occasions →</Text>
+          <Text style={styles.resourceTitle}>Socials →</Text>
         </Pressable>
       </>}
       {page === 'Ride' && <>
@@ -321,39 +320,44 @@ export function AppPage({ page }: { page: 'Home' | 'Ride' | 'Resources' | 'Setti
       {page === 'Settings' && <>
         <View style={styles.resourceButton}>
           <Text style={styles.resourceTitle}>Car Bluetooth</Text>
-          <Text style={styles.detectedBarDetail}>{!bluetooth.available ? 'Bluetooth module unavailable in this build.' : bluetooth.carConnected ? `Connected to ${bluetooth.deviceName}` : bluetooth.connected ? `${bluetooth.deviceName} · not saved as your car` : bluetooth.hasSavedCar ? 'Saved car is not the active audio output.' : 'Connect your car and select it as your iPhone’s audio output.'}</Text>
+          <Text style={styles.detectedBarDetail}>{!bluetooth.available ? 'Unavailable in this version.' : bluetooth.carConnected ? `Connected to ${bluetooth.deviceName}` : bluetooth.connected ? `${bluetooth.deviceName} · not saved as your car` : bluetooth.hasSavedCar ? 'Car saved · not connected' : 'Connect to your car’s audio to save it.'}</Text>
           <Pressable accessibilityRole="button" style={styles.settingsButton} onPress={() => {
             if (!bluetooth.available) { Alert.alert('Bluetooth module unavailable', 'Install the latest iPhone development build, then reopen Polarys.'); return; }
             if (!bluetooth.connected) { Alert.alert('Connect your car first', 'Pair your car in iPhone Settings → Bluetooth. Then select your car as the audio output in Control Center and return here.'); return; }
             if (bluetooth.saveCar()) Alert.alert('Car saved', `${bluetooth.deviceName} is now your car’s Bluetooth.`);
             else Alert.alert('No car audio connection', 'Select your car as the audio output and try again.');
-          }}><Text style={styles.featureText}>Mark this as my car’s Bluetooth</Text></Pressable>
+          }}><Text style={styles.featureText}>Save as my car</Text></Pressable>
           {bluetooth.available && bluetooth.hasSavedCar && <Pressable accessibilityRole="button" style={styles.settingsButton} onPress={() => {
             try { bluetooth.forgetCar(); } catch { Alert.alert('Could not forget car', 'Please try again.'); }
-          }}><Text style={styles.featureText}>Forget saved car</Text></Pressable>}
-          <Text style={styles.scoreHint}>Checks your saved car’s active audio connection while Polarys is running. Uses the same 45-minute night rule as the car Shortcut. Set up the Shortcut too for connections while the app is asleep or closed.</Text>
+          }}><Text style={styles.featureText}>Forget car</Text></Pressable>}
+          <Text style={styles.scoreHint}>Checks while Polarys is open. Add a Shortcut for background reminders.</Text>
         </View>
         <View style={styles.resourceButton}>
           <Text style={styles.resourceTitle}>Departure reminders</Text>
-          <Text style={styles.detectedBarDetail}>{backgroundEnabled ? 'Always location enabled · venue geofencing available' : 'Enable Always location for reminders with the app closed.'}</Text>
-          <Text style={styles.scoreHint}>After 45+ venue minutes between 9 PM and 5 AM, leaving prompts you to choose a ride. No car connection required.</Text>
+          <Text style={styles.detectedBarDetail}>{backgroundEnabled ? 'Always location enabled' : 'Allow Always location for background reminders.'}</Text>
+          <Text style={styles.scoreHint}>A ride reminder when you leave after 45+ minutes · 9 PM–5 AM.</Text>
           {monitoringError && <Text style={styles.detectedBarDetail}>{monitoringError}</Text>}
-          <Pressable accessibilityRole="button" style={styles.settingsButton} onPress={enableBackground}><Text style={styles.featureText}>Set up background location</Text></Pressable>
+          <Pressable accessibilityRole="button" style={styles.settingsButton} onPress={enableBackground}><Text style={styles.featureText}>Enable Always location</Text></Pressable>
         </View>
         <Pressable accessibilityRole="button" style={styles.resourceButton} onPress={() => router.push('/shortcuts')}>
           <Text style={styles.resourceTitle}>Add a car Shortcut</Text>
-          <Text style={styles.detectedBarDetail}>Background companion to Bluetooth · Opens Polarys when your car connects, even when it is not already running. Tap for setup instructions.</Text>
+          <Text style={styles.detectedBarDetail}>Open Polarys when your car connects.</Text>
         </Pressable>
         <Pressable accessibilityRole="button" style={styles.resourceButton} onPress={() => router.push('/home-address')}>
           <Text style={styles.resourceTitle}>Home address</Text>
           <Text style={styles.detectedBarDetail}>{savedHome?.address ?? 'Search for your address →'}</Text>
         </Pressable>
 
+        <Pressable accessibilityRole="button" style={styles.resourceButton} onPress={() => router.push('/saved-places')}>
+          <Text style={styles.resourceTitle}>I do stupid stuff here</Text>
+          <Text style={styles.detectedBarDetail}>Add a friend’s place or party address.</Text>
+        </Pressable>
+
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>MONITORING STATUS</Text>
+          <Text style={styles.sectionTitle}>PERMISSIONS</Text>
           <View style={styles.monitorGrid}>
-            <MonitorItem label="LOCATION" value={locationPermission === 'granted' ? 'Allowed' : locationPermission === 'denied' ? 'Off' : 'Checking…'} detail={locationPermission === 'granted' ? 'Location access enabled' : 'Location is needed to detect visits'} />
-            <MonitorItem label="NOTIFICATIONS" value={notificationsEnabled === null ? 'Checking…' : notificationsEnabled ? 'Allowed' : 'Off'} detail="Reminders to arrange a safe ride" />
+            <MonitorItem label="LOCATION" value={locationPermission === 'granted' ? 'Allowed' : locationPermission === 'denied' ? 'Off' : 'Checking…'} />
+            <MonitorItem label="NOTIFICATIONS" value={notificationsEnabled === null ? 'Checking…' : notificationsEnabled ? 'Allowed' : 'Off'} />
           </View>
           <Pressable accessibilityRole="button" style={styles.settingsButton} onPress={() => void Linking.openSettings()}>
             <Text style={styles.featureText}>Manage permissions</Text>
@@ -409,21 +413,8 @@ function AppOverlays() {
         <View style={styles.modalOverlay}>
           <View style={styles.scoreSheet}>
             <ScrollView contentContainerStyle={styles.scoreSheetContent}>
-              <Text style={styles.resourceTitle}>Your points</Text>
-              <Text style={styles.visitDuration}>{points.total}<Text style={styles.scoreUnit}> pts</Text></Text>
-              <Text style={styles.detectedBarDetail}>{nightError ? 'Session unavailable' : `${points.level} activity risk`}</Text>
-              <View style={styles.scoreRow}>
-                <View style={styles.pointDescription}><Text style={styles.scoreRowLabel}>Time at venues</Text><Text style={styles.scoreHint}>{Math.floor(totalVenueMs(night, Date.now()) / 60000)} min × 0.5 points</Text></View>
-                <Text style={styles.scorePoints}>+{points.venuePoints}</Text>
-              </View>
-              <View style={styles.scoreRow}>
-                <View style={styles.pointDescription}><Text style={styles.scoreRowLabel}>Car connected after 45 min</Text><Text style={styles.scoreHint}>{points.carPoints ? 'Connection recorded · counted once' : 'No qualifying connection yet'}</Text></View>
-                <Text style={styles.scorePoints}>+{points.carPoints}</Text>
-              </View>
-              <Text style={styles.scoreHint}>Low: under 45 min · Medium: 45+ min · High: 45+ min + car connection</Text>
-              <Text style={styles.detectedBarDetail}>Leaving after 45 minutes sends a ride reminder, even without your car.</Text>
-              <Text style={styles.scoreHint}>Time adds 0.5 points each full minute at a venue, from 9 PM–5 AM. Travel time adds nothing. Bluetooth or your car Shortcut adds 40 once after 45 minutes. Points reset when the night ends.</Text>
-              <Text style={styles.statusFootnote}>Low does not mean safe to drive. Polarys does not measure intoxication.</Text>
+              {showScoreDetails && <PointsGauge points={points.total} available={!nightError} />}
+              <Text style={styles.statusFootnote}>Not a sobriety check or a safe-to-drive score.</Text>
               <Pressable accessibilityRole="button" style={styles.rideButton} onPress={() => setShowScoreDetails(false)}>
                 <Text style={styles.rideButtonText}>Done</Text>
               </Pressable>
@@ -455,14 +446,14 @@ function MonitorItem({
 }: {
   label: string;
   value: string;
-  detail: string;
+  detail?: string;
   danger?: boolean;
 }) {
   return (
     <View style={styles.monitorItem}>
       <Text style={styles.monitorLabel}>{label}</Text>
       <Text style={[styles.monitorValue, danger && styles.dangerText]}>{value}</Text>
-      <Text style={styles.monitorDetail}>{detail}</Text>
+      {detail && <Text style={styles.monitorDetail}>{detail}</Text>}
     </View>
   );
 }
