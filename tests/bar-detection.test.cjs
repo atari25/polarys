@@ -25,7 +25,7 @@ function harness({ places, apiOk = true } = {}) {
         if (name === './night-controller') return { dispatchNight: async event => { if (event.type === 'leave') notifications.push(event); } };
         if (name.startsWith('.')) return load(path.relative(root, path.resolve(root, path.dirname(file), name + '.ts')));
         return {};
-      }, console,
+      }, console, AbortController, setTimeout, clearTimeout,
       process: { env: { EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: 'mock-key' } },
       Date: { now: () => now }, setInterval: () => 1, clearInterval() {},
       fetch: async (_url, options) => {

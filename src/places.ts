@@ -11,16 +11,25 @@ type PlacesResponse = {
   }[];
 };
 
+let lookupError: string | null = null;
+export const getPlacesLookupError = () => lookupError;
+
 export async function findNearbyBars(
   lat: number,
   lon: number,
   radius: number = LEGACY_CONFIG.geofenceRadiusM
 ): Promise<BarVenue[]> {
-  if (!GOOGLE_API_KEY) return [];
+  if (!GOOGLE_API_KEY) {
+    lookupError = 'Nearby bar lookup is not configured in this build. Saved places still work.';
+    return [];
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
 
   try {
     const res = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': GOOGLE_API_KEY,
@@ -40,9 +49,13 @@ export async function findNearbyBars(
       }),
     });
 
-    if (!res.ok) return [];
+    if (!res.ok) {
+      lookupError = `Nearby bars could not load (service ${res.status}). Saved places still work.`;
+      return [];
+    }
 
     const data = (await res.json()) as PlacesResponse;
+    lookupError = null;
     const places = data.places?.filter(
       (p) => p.id && p.displayName?.text && isNightlifePlace(p) &&
         Number.isFinite(p.location?.latitude) && Number.isFinite(p.location?.longitude)
@@ -56,8 +69,9 @@ export async function findNearbyBars(
       lat: place.location!.latitude!, lon: place.location!.longitude!,
     }));
   } catch {
+    lookupError = 'Nearby bars could not load. Check your internet connection. Saved places still work.';
     return [];
-  }
+  } finally { clearTimeout(timeout); }
 }
 
 

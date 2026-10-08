@@ -215,6 +215,7 @@ export function AppPage({ page }: { page: 'Home' | 'Ride' | 'Resources' | 'Setti
         <Text style={styles.scoreLabel}>{currentPosition.error && currentPosition.location ? 'LAST KNOWN LOCATION' : 'CURRENT LOCATION'}</Text>
         <Text style={styles.detectedBarDetail}>{currentPosition.location?.label ?? (currentPosition.loading ? 'Finding you…' : 'Location unavailable')}</Text>
         {(currentPosition.error || currentPosition.loading) && <Text style={styles.scoreHint}>{currentPosition.error ?? 'Updating…'}</Text>}
+        {monitoringError && <Text accessibilityLiveRegion="polite" style={styles.scoreHint}>{monitoringError}</Text>}
       </Pressable>}
       {page === 'Home' && <>
         <View style={styles.detectedBarCard}>

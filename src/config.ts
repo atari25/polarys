@@ -3,11 +3,12 @@ export const NIGHT_CONFIG = {
   startHour: 21, endHour: 5,
   thresholdMs: 45 * 60_000, carConnectionPoints: 40, pointsPerMinute: 0.5,
   barHopGraceMs: 15 * 60_000, atRiskDurationMs: 90 * 60_000,
-  geofenceRadiusM: 100, preciseVenueRadiusM: 40, homeRadiusM: 40,
+  geofenceRadiusM: 100, preciseVenueRadiusM: 40, savedPlaceRadiusM: 40, homeRadiusM: 40,
   finalizeDistanceM: 200, maxTrackingMs: 6 * 60 * 60_000,
   maxAccuracyM: 25, maxFixAgeMs: 30_000, maxFutureFixMs: 5_000,
   placesRadiusM: 5000, placesRefreshMs: 60_000, foregroundRefreshMs: 30_000,
-  maxGeofences: 20, trackingDistanceIntervalM: 25,
+  maxGeofences: 20, trackingDistanceIntervalM: 10,
+  discoveryDistanceIntervalM: 100, discoveryMaxAccuracyM: 250,
   debugLogLimit: 100, debugUnlockTaps: 5, shortcutTestWindowMs: 60_000,
 } as const;
 export const TASK_NAMES = { geofence: 'BAR_FENCE', venueCheck: 'VENUE_CHECK', legacy: 'polarys-background-location' } as const;

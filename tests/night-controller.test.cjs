@@ -7,13 +7,14 @@ const ts = require('typescript');
 function harness(data = new Map(), development = true, nearby = []) {
   let now = new Date(2026, 8, 27, 21).getTime();
   const scheduled = [], cancelled = [], cache = {};
-  let tracking = false, regions = [], registrations = 0;
+  let tracking = false, regions = [], registrations = 0, trackingOptions = null, trackingStarts = 0;
   const tasks = {};
   const nativeLocation = {
-    Accuracy: { High: 4 }, GeofencingEventType: { Enter: 1, Exit: 2 },
+    Accuracy: { High: 4, Balanced: 3 }, GeofencingEventType: { Enter: 1, Exit: 2 },
+    getForegroundPermissionsAsync: async () => ({ granted: false }),
     getBackgroundPermissionsAsync: async () => ({ granted: true }),
     hasStartedLocationUpdatesAsync: async () => tracking,
-    startLocationUpdatesAsync: async () => { tracking = true; },
+    startLocationUpdatesAsync: async (_task, options) => { tracking = true; trackingOptions = options; trackingStarts++; },
     stopLocationUpdatesAsync: async () => { tracking = false; },
     hasStartedGeofencingAsync: async () => regions.length > 0,
     startGeofencingAsync: async (_task,value) => { regions = value; registrations++; },
@@ -42,7 +43,7 @@ function harness(data = new Map(), development = true, nearby = []) {
     });
     return exports;
   }
-  return { load, tasks, nativeLocation, tracking: () => tracking, regions: () => regions, registrations: () => registrations, now: () => now, controller: load('night-controller'), data, scheduled, cancelled, advance: minutes => { now += minutes * 60000; }, night: () => JSON.parse(data.get('night')) };
+  return { load, tasks, nativeLocation, tracking: () => tracking, trackingOptions: () => trackingOptions, trackingStarts: () => trackingStarts, regions: () => regions, registrations: () => registrations, now: () => now, controller: load('night-controller'), data, scheduled, cancelled, advance: minutes => { now += minutes * 60000; }, night: () => JSON.parse(data.get('night')) };
 }
 const enter = { type: 'enter', venue: { id: 'test', name: 'Test venue' } };
 test('entry schedules nothing; home clears persisted night', async () => {
@@ -140,7 +141,8 @@ test('precise exit rejects noisy and stale fixes, then leaves before the 100m bo
  await geo.processVenueLocation({...fix(h,70),timestamp:h.now()-60000}); assert.equal(h.night().status,'at_venue');
  await geo.processVenueLocation(fix(h,60)); assert.equal(h.night().status,'between_venues');
  assert.equal(h.scheduled.length,1);
- h.advance(16); await geo.processVenueLocation(fix(h,400)); assert.equal(h.tracking(),false);
+ h.advance(16); await geo.processVenueLocation(fix(h,400)); assert.equal(h.tracking(),true);
+ assert.equal(h.trackingOptions().accuracy,3); // Return to discovery for the next venue.
 });
 test('home clears session, stops tracking and prevents immediate reentry',async()=>{
  const h=harness(), geo=h.load('geofencing'); await geo.processVenueLocation(fix(h),true);
@@ -317,4 +319,46 @@ test('saved places validate coordinates, deduplicate, and enforce the limit', as
   await places.savePlace({address:'Updated',latitude:40,longitude:-93},'Updated');
   assert.equal((await places.readSavedPlaces()).length,10);
   await assert.rejects(()=>places.savePlace({address:'Extra',latitude:41,longitude:-93},''));
+});
+
+
+test('night startup arms background discovery and fences even when the first GPS request fails',async()=>{
+ const h=harness(),geo=h.load('geofencing');
+ await assert.rejects(geo.initializeGeofencing(), /No live fix/);
+ assert.equal(h.tracking(),true);
+ assert.equal(h.trackingOptions().accuracy,3);
+ assert.equal(h.regions().length,5);
+ assert.equal(h.scheduled.length,0);
+});
+test('imprecise nearby fix warms precise tracking without inventing a visit',async()=>{
+ const h=harness(),geo=h.load('geofencing');
+ await geo.processVenueLocation(fix(h,20,80));
+ assert.equal(h.tracking(),true);
+ assert.equal(h.trackingOptions().accuracy,4);
+ assert.equal(h.trackingOptions().distanceInterval,0);
+ assert.equal(h.trackingOptions().deferredUpdatesInterval,0);
+ assert.equal((await h.load('night-store').readNight()).status,'idle');
+ h.advance(0.5); await geo.processVenueLocation(fix(h,5,5));
+ assert.equal(h.night().status,'at_venue');
+ const starts=h.trackingStarts(); h.advance(0.5); await geo.processVenueLocation(fix(h,5,5));
+ assert.equal(h.trackingStarts(),starts,'same mode must not restart native tracking');
+});
+test('discovery in a new city starts precise updates near newly discovered bar',async()=>{
+ const bar={id:'chicago',name:'Chicago bar',lat:41.9,lon:-87.6};
+ const h=harness(new Map(),true,[bar]),geo=h.load('geofencing');
+ await geo.processVenueLocation({timestamp:h.now(),coords:{latitude:bar.lat,longitude:bar.lon,accuracy:80}});
+ assert.equal(h.trackingOptions().accuracy,4);
+ assert.ok(h.regions().some(r=>r.identifier===bar.id));
+ assert.equal((await h.load('night-store').readNight()).status,'idle');
+ h.advance(0.5);
+ await geo.processVenueLocation({timestamp:h.now(),coords:{latitude:bar.lat,longitude:bar.lon,accuracy:5}});
+ assert.equal(h.night().currentVenue.id,bar.id);
+});
+test('discovery is bounded by six hours even without a confirmed visit',async()=>{
+ const h=harness(),geo=h.load('geofencing');
+ await assert.rejects(geo.initializeGeofencing());
+ h.advance(360); await geo.checkTrackingSafety();
+ assert.equal(h.tracking(),false);
+ await geo.handleGeofence(1,{identifier:'cys-roost'});
+ assert.equal(h.tracking(),false);
 });
