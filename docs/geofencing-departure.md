@@ -50,3 +50,12 @@ Saved places reserve slots within the existing 20-region limit and use the same 
 Tapping a night notification opens “How are you getting home?” Choosing “I was planning to drive” opens the drink question; all answers lead to ride options and none is persisted. Users can also open ride options directly.
 
 Validation: tests cover persistence across restart, offline registration, the 45-minute departure, duplicate callbacks, short visits, daytime exclusion, removal, saved-place priority within 20 regions, invalid coordinates, deduplication, and the 10-place limit. Physical iPhone boundary delivery still needs a real walk test with Always + Precise location and notifications enabled.
+
+## October 2026 boundary monitoring update
+
+- Nighttime background discovery uses balanced accuracy with a 100 m movement interval, switching to precise updates near known venues or during an active visit. Precise updates allow stationary GPS improvements; uncertain fixes never start a visit timer.
+- Wakeup regions remain 100 m. Bars and saved places each use a 40 m confirmation radius with the GPS accuracy buffer. Saved-place radius is configured separately.
+- Saving a place evaluates the current position immediately. Foreground monitoring requests a fresh fix every 30 seconds and watches movement at 10 m intervals.
+- Location callbacks refresh nearby discovery with the existing lookup throttle. Lookup failures and uncertain GPS are shown on Home; network lookup times out after eight seconds.
+- After a visit finalizes away from venues, background tracking returns to discovery. Home suppression, the night window, and the six-hour tracking limit still apply. The background location indicator is enabled; battery use may increase.
+- Validation: all 87 automated tests and TypeScript pass. Locked-phone boundary and notification timing have not been verified for this update; iOS delivery is not guaranteed to be instant.

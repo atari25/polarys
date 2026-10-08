@@ -11,6 +11,8 @@ import { isNightTime } from './night-session';
 import { isSavedPlace, readSavedPlaces } from './saved-places';
 
 const KEY = 'polarys.tracking.v2';
+let locationIssue: string | null = null;
+export const getVenueLocationIssue = () => locationIssue;
 type Runtime = { venues: BarVenue[]; lastFix: number; startedAt: number | null; blockedUntil: number; lastLookup: number };
 let queue: Promise<unknown> = Promise.resolve();
 function serial<T>(work: () => Promise<T>): Promise<T> {
@@ -36,18 +38,32 @@ export function nearestVenues(venues: BarVenue[], lat: number, lon: number) {
 }
 async function stopPrecise() {
   await stopLocationTask(TASK_NAMES.venueCheck);
+  await deviceStorage.setItem(KEY + '.mode', 'stopped');
 }
-async function startPrecise(runtime: Runtime, now: number) {
+// One native task changes accuracy instead of running two competing trackers.
+async function startBackground(runtime: Runtime, now: number, mode: 'discovery' | 'precise') {
   if (!isNightTime(now) || now < runtime.blockedUntil) return;
   if (!(await Location.getBackgroundPermissionsAsync()).granted) return;
-  if (!await Location.hasStartedLocationUpdatesAsync(TASK_NAMES.venueCheck)) {
+  const signature = `v1:${mode}`;
+  if (!await Location.hasStartedLocationUpdatesAsync(TASK_NAMES.venueCheck) ||
+      await deviceStorage.getItem(KEY + '.mode') !== signature) {
     await Location.startLocationUpdatesAsync(TASK_NAMES.venueCheck, {
-      accuracy: Location.Accuracy.High, distanceInterval: C.trackingDistanceIntervalM,
-      pausesUpdatesAutomatically: false, showsBackgroundLocationIndicator: false,
+      accuracy: mode === 'precise' ? Location.Accuracy.High : Location.Accuracy.Balanced,
+      // Zero allows a better fix even when the person remains seated indoors.
+      distanceInterval: mode === 'precise' ? 0 : C.discoveryDistanceIntervalM,
+      deferredUpdatesDistance: 0, deferredUpdatesInterval: 0, deferredUpdatesTimeout: 0,
+      pausesUpdatesAutomatically: false, showsBackgroundLocationIndicator: true,
+      foregroundService: {
+        notificationTitle: 'Polarys night reminders',
+        notificationBody: 'Checking nearby places so we can remind you when you leave.',
+        killServiceOnDestroy: false,
+      },
     });
+    await deviceStorage.setItem(KEY + '.mode', signature);
   }
   runtime.startedAt ??= now;
 }
+const startPrecise = (runtime: Runtime, now: number) => startBackground(runtime, now, 'precise');
 async function refresh(runtime: Runtime, lat: number, lon: number, now: number) {
   // Apply additions to the built-in list even when a persisted lookup is recent.
   runtime.venues = [...new Map([...runtime.venues, ...CORE_VENUES].map(v => [v.id, v])).values()];
@@ -88,13 +104,18 @@ async function registerRegions(runtime: Runtime) {
     }
   }
 }
-export function refreshSavedPlaceMonitoring() {
-  return serial(async () => {
+export async function refreshSavedPlaceMonitoring() {
+  await serial(async () => {
     const runtime = await read();
     await syncSavedPlaces(runtime);
     await registerRegions(runtime);
     await save(runtime);
   });
+  // Registering a fence while already inside it may not produce a new crossing.
+  // Evaluate the current position immediately, outside the serial queue.
+  if ((await Location.getForegroundPermissionsAsync()).granted) {
+    await processVenueLocation(await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }));
+  }
 }
 
 async function safety(runtime: Runtime, now: number) {
@@ -136,16 +157,36 @@ export async function resumeNightForTesting() {
 }
 async function processFix(position: Location.LocationObject, refreshRegions: boolean) {
   const now = Date.now(), runtime = await read();
+  const { latitude: lat, longitude: lon, accuracy } = position.coords;
+  const usableForDiscovery = Number.isFinite(lat) && Math.abs(lat) <= 90 && Number.isFinite(lon) && Math.abs(lon) <= 180 &&
+    accuracy != null && Number.isFinite(accuracy) && accuracy >= 0 && accuracy <= C.discoveryMaxAccuracyM &&
+    Number.isFinite(position.timestamp) && now-position.timestamp <= C.maxFixAgeMs && position.timestamp-now <= C.maxFutureFixMs;
   await syncSavedPlaces(runtime);
   if (!await safety(runtime,now)) {
-    if (refreshRegions) await refresh(runtime,position.coords.latitude,position.coords.longitude,now);
+    locationIssue = null;
+    if (refreshRegions && usableForDiscovery) await refresh(runtime,lat,lon,now);
     return;
   }
-  const { latitude: lat, longitude: lon, accuracy } = position.coords;
-  if (!Number.isFinite(lat) || !Number.isFinite(lon) || accuracy == null || accuracy < 0 || accuracy > C.maxAccuracyM ||
-      !Number.isFinite(accuracy) || position.timestamp <= runtime.lastFix || now-position.timestamp > C.maxFixAgeMs || position.timestamp-now > C.maxFutureFixMs) return;
-  runtime.lastFix = position.timestamp;
+  if (position.timestamp <= runtime.lastFix) return;
+  if (!usableForDiscovery || accuracy == null) {
+    locationIssue = 'Waiting for a precise location to confirm your visit. Check Precise Location in Settings.';
+    const night = await readNight(now);
+    await startBackground(runtime, now, night.status === 'at_venue' || night.status === 'between_venues' ? 'precise' : 'discovery');
+    await save(runtime);
+    return;
+  }
   if (refreshRegions) await refresh(runtime,lat,lon,now);
+  const activeNight = await readNight(now);
+  const closeToVenue = runtime.venues.some(v => haversineMeters(lat,lon,v.lat,v.lon) <= C.geofenceRadiusM + accuracy);
+  await startBackground(runtime, now,
+    closeToVenue || activeNight.status === 'at_venue' || activeNight.status === 'between_venues' ? 'precise' : 'discovery');
+  if (accuracy > C.maxAccuracyM) {
+    locationIssue = 'Waiting for a precise location to confirm your visit. Check Precise Location in Settings.';
+    await save(runtime);
+    return;
+  }
+  locationIssue = null;
+  runtime.lastFix = position.timestamp;
   let home: { latitude: number; longitude: number } | null = null;
   try { home = JSON.parse(await deviceStorage.getItem(STORAGE_KEYS.home) ?? 'null'); } catch { /* Invalid home must not break monitoring. */ }
   if (home && Number.isFinite(home.latitude) && Number.isFinite(home.longitude) &&
@@ -158,29 +199,29 @@ async function processFix(position: Location.LocationObject, refreshRegions: boo
   const nearest = venues[0];
   const distance = nearest ? haversineMeters(lat,lon,nearest.lat,nearest.lon) : Infinity;
   const night = await readNight(now);
-  if (nearest && distance + accuracy <= C.preciseVenueRadiusM) {
+  if (nearest && distance + accuracy <= (isSavedPlace(nearest.id) ? C.savedPlaceRadiusM : C.preciseVenueRadiusM)) {
     await dispatchNight({ type: 'enter', venue: nearest },now);
     await startPrecise(runtime,now);
   } else if (night.status === 'at_venue') {
     const current = runtime.venues.find(v => v.id === night.currentVenue?.id);
     // Accuracy buffer prevents GPS jitter from causing an exit.
-    if (current && haversineMeters(lat,lon,current.lat,current.lon) - accuracy > C.preciseVenueRadiusM) await dispatchNight({ type: 'leave' },now);
+    if (current && haversineMeters(lat,lon,current.lat,current.lon) - accuracy > (isSavedPlace(current.id) ? C.savedPlaceRadiusM : C.preciseVenueRadiusM)) await dispatchNight({ type: 'leave' },now);
   }
   const after = await readNight(now);
   if (distance - accuracy > C.finalizeDistanceM && after.lastLeftAt !== null && now-after.lastLeftAt > C.barHopGraceMs) {
     await dispatchNight({ type: 'finalize' },now);
-    await stopPrecise(); runtime.startedAt = null;
+    await startBackground(runtime,now,'discovery');
   } else await dispatchNight({ type: 'tick' },now);
   await save(runtime);
 }
-export const processVenueLocation = (position: Location.LocationObject, refreshRegions = false) => serial(() => processFix(position,refreshRegions));
+export const processVenueLocation = (position: Location.LocationObject, refreshRegions = true) => serial(() => processFix(position,refreshRegions));
 export function handleGeofence(eventType: Location.GeofencingEventType, region: Location.LocationRegion) {
   return serial(async () => {
     const now = Date.now(), runtime = await read();
     await syncSavedPlaces(runtime);
     const venue = runtime.venues.find(v => v.id === region.identifier);
     if (!venue) return;
-    await refresh(runtime,venue.lat,venue.lon,now);
+    // Start location recovery before any network lookup. Saved fences work offline.
     if (!await safety(runtime,now)) return;
     if (eventType === Location.GeofencingEventType.Enter) {
       await startPrecise(runtime,now); await save(runtime);
@@ -201,6 +242,7 @@ export function handleGeofence(eventType: Location.GeofencingEventType, region: 
   });
 }
 export async function initializeGeofencing() {
+  await stopLocationTask(TASK_NAMES.legacy);
   await serial(async () => {
     // One-time migration after removing the manual end-night control.
     // Home detection below still applies immediately to the next good fix.
@@ -210,8 +252,15 @@ export async function initializeGeofencing() {
       await save(runtime);
       await deviceStorage.setItem(KEY + '.manualEndRemoved', 'yes');
     }
+    const runtime = await read(), now = Date.now();
+    await syncSavedPlaces(runtime);
+    await registerRegions(runtime);
+    if (await safety(runtime,now)) {
+      const night = await readNight(now);
+      await startBackground(runtime,now,night.status === 'at_venue' || night.status === 'between_venues' ? 'precise' : 'discovery');
+      await save(runtime);
+    }
   });
-  await stopLocationTask(TASK_NAMES.legacy);
   const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
   await processVenueLocation(position,true);
 }

@@ -24,7 +24,8 @@
           "uber",
           "lyft"
         ]
-      }
+      },
+      "buildNumber": "3"
     },
     "android": {
       "adaptiveIcon": {
