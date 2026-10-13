@@ -28,6 +28,7 @@ test('suggestions use returned place IDs and labels; short inputs make no reques
  const values=await h.api.suggestAddresses('123 Main',new AbortController().signal);
  assert.equal(values.length,1);assert.equal(values[0].id,'place-1');
  assert.equal(JSON.parse(h.requests[0].options.body).input,'123 Main');
+ assert.equal(h.requests[0].options.headers['X-Ios-Bundle-Identifier'],'com.polarys.app');
 });
 test('chosen suggestion resolves to coordinates and persists canonical address',async()=>{
  const h=harness({formattedAddress:'123 Main St, Ames, IA',location:{latitude:42,longitude:-93}});
@@ -36,6 +37,7 @@ test('chosen suggestion resolves to coordinates and persists canonical address',
  await h.api.saveHome(home);
  assert.equal((await h.api.readHome()).latitude,42);
  assert.ok(h.requests[0].url.endsWith('place%2F1'));
+ assert.equal(h.requests[0].options.headers['X-Ios-Bundle-Identifier'],'com.polarys.app');
 });
 test('API failure and missing coordinates cannot save a false home',async()=>{
  const h=harness({ok:false});

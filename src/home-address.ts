@@ -1,4 +1,5 @@
 import * as Location from 'expo-location';
+import { Platform } from 'react-native';
 import { GOOGLE_API_KEY } from './config';
 import { deviceStorage, STORAGE_KEYS } from './storage';
 import { HomeAddress, validCoordinates } from './ride-links';
@@ -16,7 +17,8 @@ async function googleSuggestions(input: string, signal: AbortSignal): Promise<Ad
   if (input.trim().length < 4) return [];
   if (!GOOGLE_API_KEY) return [];
   const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
-    method:'POST', signal, headers:{'Content-Type':'application/json','X-Goog-Api-Key':GOOGLE_API_KEY},
+    method:'POST', signal, headers:{'Content-Type':'application/json','X-Goog-Api-Key':GOOGLE_API_KEY,
+      ...(Platform.OS === 'ios' ? { 'X-Ios-Bundle-Identifier': 'com.polarys.app' } : {})},
     body:JSON.stringify({ input, includedRegionCodes:['us'], locationBias:{circle:{center:{latitude:42.0308,longitude:-93.6319},radius:50000}} }),
   });
   if (!res.ok) {
@@ -41,7 +43,8 @@ export async function resolveAddress(suggestion: AddressSuggestion): Promise<Hom
   if (suggestion.coordinates) return suggestion.coordinates;
   try {
     const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(suggestion.id)}`,{
-      headers:{'X-Goog-Api-Key':GOOGLE_API_KEY,'X-Goog-FieldMask':'formattedAddress,location'},
+      headers:{'X-Goog-Api-Key':GOOGLE_API_KEY,'X-Goog-FieldMask':'formattedAddress,location',
+        ...(Platform.OS === 'ios' ? { 'X-Ios-Bundle-Identifier': 'com.polarys.app' } : {})},
     });
     if (res.ok) {
       const data = await res.json() as { formattedAddress?: string; location?: {latitude:number;longitude:number} };

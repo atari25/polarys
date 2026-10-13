@@ -21,6 +21,7 @@ function harness({ places, apiOk = true } = {}) {
     vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, {
       exports, require: name => {
         if (mocks[name]) return mocks[name];
+        if (name === 'react-native') return { Platform: { OS: 'ios' } };
         if (name === 'expo-task-manager') return { defineTask: (_name, callback) => { task = callback; } };
         if (name === './night-controller') return { dispatchNight: async event => { if (event.type === 'leave') notifications.push(event); } };
         if (name.startsWith('.')) return load(path.relative(root, path.resolve(root, path.dirname(file), name + '.ts')));
@@ -29,6 +30,7 @@ function harness({ places, apiOk = true } = {}) {
       process: { env: { EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: 'mock-key' } },
       Date: { now: () => now }, setInterval: () => 1, clearInterval() {},
       fetch: async (_url, options) => {
+        assert.equal(options.headers['X-Ios-Bundle-Identifier'], 'com.polarys.app');
         requests.push(JSON.parse(options.body));
         return { ok: apiOk, json: async () => ({ places: places ?? [
           { id: 'far', displayName: { text: 'Far bar' }, primaryType: 'bar', location: { latitude: latitude(80), longitude: 0 } },

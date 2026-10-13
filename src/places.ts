@@ -1,4 +1,5 @@
 import { GOOGLE_API_KEY, LEGACY_CONFIG } from './config';
+import { Platform } from 'react-native';
 import { haversineMeters } from './geo';
 import { BarVenue, NIGHTLIFE_SEARCH_TYPES, isNightlifePlace } from './venues';
 type PlacesResponse = {
@@ -33,6 +34,7 @@ export async function findNearbyBars(
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': GOOGLE_API_KEY,
+        ...(Platform.OS === 'ios' ? { 'X-Ios-Bundle-Identifier': 'com.polarys.app' } : {}),
         'X-Goog-FieldMask':
           'places.id,places.displayName,places.primaryType,places.types,places.location',
       },
