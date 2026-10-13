@@ -1,0 +1,8 @@
+project_id = "polarys"
+
+[auth]
+enable_anonymous_sign_ins = true
+
+[functions.push-broadcast]
+# This admin-only endpoint verifies its own secret before doing any work.
+verify_jwt = false

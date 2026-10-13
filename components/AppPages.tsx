@@ -1,3 +1,4 @@
+import { PushSettings } from '@/components/PushSettings';
 import { PointsGauge } from '@/components/PointsGauge';
 import { dailyHeadline } from '../src/daily-headline';
 import { readHome } from '@/src/home-address';
@@ -355,6 +356,7 @@ export function AppPage({ page }: { page: 'Home' | 'Ride' | 'Resources' | 'Setti
         </Pressable>
 
         <View style={styles.section}>
+          <PushSettings />
           <Text style={styles.sectionTitle}>PERMISSIONS</Text>
           <View style={styles.monitorGrid}>
             <MonitorItem label="LOCATION" value={locationPermission === 'granted' ? 'Allowed' : locationPermission === 'denied' ? 'Off' : 'Checking…'} />

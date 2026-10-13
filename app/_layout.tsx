@@ -1,4 +1,5 @@
 import '@/src/tasks';
+import { startPushRegistration } from '@/src/push-notifications';
 import { AppColors } from '@/constants/theme';
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, router } from 'expo-router';
@@ -8,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 export default function RootLayout() {
+  useEffect(() => startPushRegistration(), []);
   useEffect(() => listenForNightNotifications(() => router.push('/alert')), []);
   return (
     <ThemeProvider value={{ ...DarkTheme, colors: { ...DarkTheme.colors, primary: AppColors.highlight, background: AppColors.background, card: AppColors.surface, text: '#FFFFFF', border: '#333333', notification: '#FFFFFF' } }}>
